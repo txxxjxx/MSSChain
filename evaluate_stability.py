@@ -35,7 +35,7 @@ def arguments():
     parser.add_argument('--burst-seconds', type=int, default=100)
     parser.add_argument('--total-seconds', type=int, default=1200)
     parser.add_argument('--cpu-budget', type=float, default=36.)
-    parser.add_argument('--bandwidth-budget', type=float, default=64.)
+    parser.add_argument('--bandwidth-budget', type=float, default=40.)
     parser.add_argument('--critical-capacity-tps', type=float, default=8000.)
     parser.add_argument('--placement-chunk-size', type=int, default=1024)
     return parser.parse_args()
@@ -83,7 +83,7 @@ def main():
     params.ShardNum = shards
     protocol = (saved.get('info') or {}).get('protocol') or {}
     budget = (float(args.cpu_budget), float(args.bandwidth_budget))
-    weights = tuple(protocol.get('resource_weights_cpu_bandwidth', (0.18, 0.10)))
+    weights = tuple(protocol.get('resource_weights_cpu_bandwidth', (0.03, 0.02)))
     if len(weights) != 2 or min(weights) <= 0:
         raise ValueError('Checkpoint has invalid Eq. (10) resource weights')
     block_max = int(saved['bmax'])

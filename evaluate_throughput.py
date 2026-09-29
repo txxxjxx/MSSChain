@@ -78,8 +78,8 @@ def arguments():
         help=("Use --cpu-budget and --bandwidth-budget for a learned policy instead "
               "of the resource budget stored in its checkpoint."),
     )
-    parser.add_argument("--cpu-weight", type=float, default=0.18)
-    parser.add_argument("--bandwidth-weight", type=float, default=0.10)
+    parser.add_argument("--cpu-weight", type=float, default=0.03)
+    parser.add_argument("--bandwidth-weight", type=float, default=0.02)
     parser.add_argument("--valid-transaction-ratio", type=float, default=1.0)
     parser.add_argument("--critical-capacity-tps", type=float, default=8000.0)
     parser.add_argument("--cpu-tps-per-core", type=float, default=312.5)

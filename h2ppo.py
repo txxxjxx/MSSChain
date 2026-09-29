@@ -11,6 +11,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
+CPU_BUDGET = 36.
+BANDWIDTH_BUDGET = 40.
+RESOURCE_WEIGHTS = (0.03, 0.02)
 
 def command(args):
     print('RUN: ' + shlex.join([str(a) for a in args]), flush=True)
@@ -28,8 +31,8 @@ def main():
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--load-prior-weight', type=float, default=256.)
     p.add_argument('--actor-lr', type=float, default=2e-5)
-    p.add_argument('--cpu-budget', type=float, default=36.)
-    p.add_argument('--bandwidth-budget', type=float, default=64.)
+    p.add_argument('--cpu-budget', type=float, default=CPU_BUDGET)
+    p.add_argument('--bandwidth-budget', type=float, default=BANDWIDTH_BUDGET)
     p.add_argument('--base-rate', type=int, default=2000)
     p.add_argument('--burst-rate', type=int, default=8000)
     p.add_argument('--pre-seconds', type=int, default=500)
@@ -60,8 +63,8 @@ def main():
     if a.mode in ('train','retrain'):
         if a.mode=='train' and a.checkpoint is not None:
             p.error('Fresh training does not accept --checkpoint; use retrain to warm-start.')
-        if (a.cpu_budget,a.bandwidth_budget)!=(36.,64.):
-            p.error('Release training uses fixed network totals: 36 cores, 64 Mbps')
+        if (a.cpu_budget,a.bandwidth_budget)!=(CPU_BUDGET,BANDWIDTH_BUDGET):
+            p.error('Release training uses fixed network totals: 36 cores, 40 Mbps')
         if (a.output/'summary.json').exists():
             p.error('Training output already exists; choose a new output directory')
         cmd=[sys.executable,'-u',ROOT/'run_h2ppo_5m.py',
@@ -76,8 +79,9 @@ def main():
              '--rollout-steps',8,'--placement-temporal-weight',1,
              '--actor-lr',a.actor_lr,'--critic-lr',0.0001,'--target-kl',0.01,
              '--seed',a.seed,'--torch-threads',a.threads,
-             '--cpu-budget',36,'--bandwidth-budget',64,'--bandwidth-unit','Mb/s',
-             '--cpu-weight',0.18,'--bandwidth-weight',0.1,'--resource-model','paper_eq10',
+             '--cpu-budget',CPU_BUDGET,'--bandwidth-budget',BANDWIDTH_BUDGET,'--bandwidth-unit','Mb/s',
+             '--cpu-weight',RESOURCE_WEIGHTS[0],'--bandwidth-weight',RESOURCE_WEIGHTS[1],
+             '--resource-model','paper_eq10',
              '--valid-transaction-ratio',1,'--cpu-tps-per-core',312.5,
              '--locality-weight',0.5,'--reward-locality-weight',0.5,
              '--load-weight',a.load_prior_weight,'--prior-temperature',4,
@@ -132,12 +136,12 @@ def placement(a):
     params.ShardNum=shards
     budget=(a.cpu_budget,a.bandwidth_budget)
     # Recreate the training resource and service-capacity configuration.
-    raw=shards*min(6000.,6000/8*sum(np.sqrt(w*b/shards) for w,b in zip((.18,.1),budget)))
+    raw=shards*min(6000.,6000/8*sum(np.sqrt(w*b/shards) for w,b in zip(RESOURCE_WEIGHTS,budget)))
     env=Supervisor(file_paths=a.input,batch_size=8000,window_size=50000,
         transaction_limit=a.transactions,retain_blocks=False,track_latency=False,
         enhanced_observation=True,stability_observation=int(saved['num_states'])==12*shards,
         resource_control=True,resource_max=budget,network_resource_budget=budget,
-        initial_resources=np.asarray(budget)/shards,resource_weights=(.18,.1),
+        initial_resources=np.asarray(budget)/shards,resource_weights=RESOURCE_WEIGHTS,
         resource_model='paper_eq10',valid_transaction_ratio=1.,cpu_tps_per_core=312.5,
         block_min=2000,block_max=6000,arrival_process='poisson',arrival_order='csv',
         alpha=.5,decay_seconds=31536000.,zeta=8.,load_feature_overload_power=2.,
