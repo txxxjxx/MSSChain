@@ -349,7 +349,7 @@ class HPPO:
             return choose_control(current.control_state())
         if self.control_mode == 'flat':
             # Flat PPO samples one simultaneous hybrid action from one shared
-            # pre-action representation, matching the paper's ablation.
+            # pre-action representation for the shared policy.
             gate,controls = choose_control(value_state)
             next_state,reward,done = env.step(placement,gate,controls)
         else:

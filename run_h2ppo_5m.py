@@ -1,4 +1,4 @@
-"""H2PPO training implementation. Use h2ppo.py train for release defaults.
+"""H2PPO training implementation. Use h2ppo.py train or retrain for release defaults.
 
 The public entry point initializes a new model, trains in original CSV order,
 and runs placement evaluation separately on the original CSV prefix.
@@ -93,20 +93,9 @@ def parse_args():
                         help=('Softmax temperature for the paper-state placement warm start; '
                               'larger values produce a softer prior'))
     parser.add_argument('--decay-seconds',type=float,default=86_400.)
-    parser.add_argument('--disable-time-decay',action='store_true',
-                        help='Figure 6 ablation 1: replace the temporal factor T_v by one')
     parser.add_argument('--preserve-dependency-magnitude',action='store_true',
                         help=('Expose the raw paper TD(u) vector to the policy instead of L1 '
                               'normalizing away its absolute time-decay magnitude'))
-    parser.add_argument('--disable-spent-dependency',action='store_true',
-                        help=('Figure 6 ablation 2: replace the spent-state transaction '
-                              'dependency factor rho(v) by one'))
-    parser.add_argument('--disable-transaction-dependency',action='store_true',
-                        help=('Figure 6 full transaction-dependency ablation: zero the '
-                              'TD(u), Nbr(u), and ANbr(u) placement features and locality score'))
-    parser.add_argument('--disable-lyapunov-reward',action='store_true',
-                        help=('Figure 6 ablation 3: omit the queue-drift term from the '
-                              'training reward while retaining the hierarchical policy'))
     parser.add_argument('--cross-penalty',type=float,default=0.,
                         help='Per-transaction training penalty for a cross-shard placement')
     parser.add_argument('--balance-sensitivity',type=float,default=8.,
@@ -376,16 +365,8 @@ def main():
         'lyapunov_queue_potential':{
             'definition':'sum_i Q_i(t)^2 + weight * max_i Q_i(t)^2',
             'peak_queue_drift_weight':args.peak_queue_drift_weight,
-            'enabled_in_training_reward':not args.disable_lyapunov_reward,
+            'enabled_in_training_reward':True,
             'inference_action_override':False,
-        },
-        'figure6_component_ablation':{
-            'time_decay_enabled':not args.disable_time_decay,
-            'transaction_dependency_enabled':not args.disable_transaction_dependency,
-            'dependency_magnitude_preserved':args.preserve_dependency_magnitude,
-            'spent_state_dependency_enabled':not args.disable_spent_dependency,
-            'lyapunov_reward_enabled':not args.disable_lyapunov_reward,
-            'stability_control_enabled':args.control_mode == 'hierarchical',
         },
         'arrival_scope':'total system across all shards',
         'training_arrival_schedule_seconds':(
@@ -502,10 +483,10 @@ def main():
             queue_service_mode=args.queue_service_mode,
             service_capacity_scale=service_capacity_scale,
             peak_queue_drift_weight=args.peak_queue_drift_weight,
-            use_time_decay=not args.disable_time_decay,
-            use_spent_dependency=not args.disable_spent_dependency,
-            use_transaction_dependency=not args.disable_transaction_dependency,
-            use_lyapunov_reward=not args.disable_lyapunov_reward,
+            use_time_decay=True,
+            use_spent_dependency=True,
+            use_transaction_dependency=True,
+            use_lyapunov_reward=True,
             normalize_dependency_observation=not args.preserve_dependency_magnitude)
 
     training_rate=(args.arrival_rate if args.training_arrival_schedule is None

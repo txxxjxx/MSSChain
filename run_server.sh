@@ -7,7 +7,8 @@ TRAIN_TRANSACTIONS="${TRAIN_TRANSACTIONS:-5000000}"
 EVAL_TRANSACTIONS="${EVAL_TRANSACTIONS:-2000000}"
 TORCH_THREADS="${TORCH_THREADS:-8}"
 SHARDS="${SHARDS:-4 8 16 32}"
-RUN_THROUGHPUT="${RUN_THROUGHPUT:-1}"
+RUN_PLACEMENT="${RUN_PLACEMENT:-0}"
+RUN_THROUGHPUT="${RUN_THROUGHPUT:-0}"
 RUN_STABILITY="${RUN_STABILITY:-0}"
 if (( $# < 1 )); then
   echo "Usage: bash run_server.sh INPUT0.csv INPUT1.csv [INPUT2.csv ...]" >&2
@@ -29,7 +30,7 @@ for s in $SHARDS; do
   if [[ ! -f "$checkpoint" || ! -f "$out/train/summary.json" ]]; then
     "$PYTHON" -u h2ppo.py train --shards "$s" --transactions "$TRAIN_TRANSACTIONS" --threads "$TORCH_THREADS" --output "$out/train" --input "${INPUTS[@]}" 2>&1 | tee "$out/train.log"
   fi
-  if [[ ! -f "$out/placement/summary.json" ]]; then
+  if [[ "$RUN_PLACEMENT" == 1 && ! -f "$out/placement/summary.json" ]]; then
     "$PYTHON" -u h2ppo.py placement --checkpoint "$checkpoint" --shards "$s" --transactions "$EVAL_TRANSACTIONS" --threads "$TORCH_THREADS" --output "$out/placement" --input "${INPUTS[@]}" 2>&1 | tee "$out/placement.log"
   fi
   if [[ "$RUN_THROUGHPUT" == 1 && ! -f "$out/throughput/summary.json" ]]; then
@@ -39,6 +40,8 @@ for s in $SHARDS; do
     "$PYTHON" -u h2ppo.py stability --checkpoint "$checkpoint" --shards "$s" --seed 0 --threads "$TORCH_THREADS" --output "$out/stability" --input "${INPUTS[@]}" 2>&1 | tee "$out/stability.log"
   fi
 done
-"$PYTHON" summarize.py --root "$OUTPUT_ROOT"
+if [[ "$RUN_PLACEMENT" == 1 ]]; then
+  "$PYTHON" summarize.py --root "$OUTPUT_ROOT"
+fi
 date -Iseconds > "$OUTPUT_ROOT/complete.txt"
 echo "Completed: $OUTPUT_ROOT"

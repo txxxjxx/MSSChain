@@ -18,7 +18,7 @@ def command(args):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('mode', choices=['train', 'placement', 'throughput', 'stability'])
+    p.add_argument('mode', choices=['train', 'retrain', 'placement', 'throughput', 'stability'])
     p.add_argument('--input', nargs='+', required=True, type=Path)
     p.add_argument('--output', required=True, type=Path)
     p.add_argument('--checkpoint', type=Path)
@@ -49,15 +49,17 @@ def main():
         if a.transactions is not None:
             p.error('--transactions is not used for a fixed-duration stability test')
     else:
-        a.transactions=a.transactions or (5_000_000 if a.mode=='train' else 2_000_000)
+        if a.transactions is None:
+            a.transactions=(5_000_000 if a.mode=='train' else
+                            1_000_000 if a.mode=='retrain' else 2_000_000)
         if a.transactions<=0 or a.transactions%50_000:
             p.error('transactions must be a positive multiple of 50,000')
     if a.mode!='train' and a.checkpoint is None:
-        p.error('--checkpoint is required for evaluation')
+        p.error('--checkpoint is required for retraining and evaluation')
     a.output.mkdir(parents=True,exist_ok=True)
-    if a.mode=='train':
-        if a.checkpoint is not None:
-            p.error('Training starts from random initialization. --checkpoint is for evaluation only.')
+    if a.mode in ('train','retrain'):
+        if a.mode=='train' and a.checkpoint is not None:
+            p.error('Fresh training does not accept --checkpoint; use retrain to warm-start.')
         if (a.cpu_budget,a.bandwidth_budget)!=(36.,64.):
             p.error('Release training uses fixed network totals: 36 cores, 64 Mbps')
         if (a.output/'summary.json').exists():
@@ -84,7 +86,11 @@ def main():
              '--queue-readiness-state','--address-affinity-weight',1,
              '--dependency-weight',3.2,'--neighbor-count-weight',48,
              '--neighbor-location-weight',16]
-        cmd+=['--queue-prior-weight',0.1]
+        # The checkpoint already contains the learned queue prior. Reapplying
+        # its initialization coefficient would change the policy before PPO.
+        cmd+=['--queue-prior-weight',0.1 if a.mode=='train' else 0.]
+        if a.mode=='retrain':
+            cmd+=['--resume-checkpoint',a.checkpoint]
         cmd+=['--input',*a.input]
         command(cmd)
     elif a.mode=='stability':
@@ -125,7 +131,7 @@ def placement(a):
         raise ValueError('Checkpoint shard count differs from --shards')
     params.ShardNum=shards
     budget=(a.cpu_budget,a.bandwidth_budget)
-    # Same environment for candidate, V22 and V26; checkpoint architecture is preserved.
+    # Recreate the training resource and service-capacity configuration.
     raw=shards*min(6000.,6000/8*sum(np.sqrt(w*b/shards) for w,b in zip((.18,.1),budget)))
     env=Supervisor(file_paths=a.input,batch_size=8000,window_size=50000,
         transaction_limit=a.transactions,retain_blocks=False,track_latency=False,
